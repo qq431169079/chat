@@ -17,6 +17,17 @@ private:
 public:
     catchat();
     ~catchat();
+
+    void dht_port(uint16_t);
+    uint16_t dht_port() const;
+
+    void dht_node_id(const std::string&);
+    std::string dht_node_id() const;
+
+    void read_config(const char* filename = nullptr);
+    void write_config(const char* filename);
+
+    void dht_start();
 };
 
 class CATCHAT_API node

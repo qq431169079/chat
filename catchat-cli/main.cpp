@@ -3,14 +3,11 @@
 using std::cout;
 
 
-int main(int argc, char *argv[])
+int main(int , char **)
 {
-    if (argc != 0) {
-        cout<<"usage: "<<argv[0]<<"\n";
-        return 1;
-    }
     catchat::catchat init;
-    catchat::node node;
-    node.run_once();
+    init.read_config("catchat.cfg");
+    init.write_config("catchat.cfg");
+    init.dht_start();
     return 0;
 }
