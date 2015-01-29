@@ -1,4 +1,5 @@
 /* vim: et sw=4 sts=4 ts=4 : */
+#include <botan/botan.h>
 #include <catchat/catchat.hpp>
 #include <iostream>
 
@@ -9,7 +10,7 @@ namespace catchat
 
 class catchat::impl
 {
-
+    Botan::LibraryInitializer init;
 };
 
 catchat::catchat()
