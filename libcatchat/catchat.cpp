@@ -2,6 +2,7 @@
 #include <botan/botan.h>
 #include <catchat/catchat.hpp>
 #include <iostream>
+#include "compat.hpp"
 
 using namespace std;
 
@@ -14,6 +15,7 @@ class catchat::impl
 };
 
 catchat::catchat()
+    : _impl(make_unique<catchat::impl>())
 {
 
 }
