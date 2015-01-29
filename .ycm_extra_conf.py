@@ -84,6 +84,8 @@ flags = [
 '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/c++/v1',
 '-isystem',
 '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include',
+'-isystem',
+'/usr/include/botan-1.10/',
 '-I',
 os.path.join(BASE_DIR, 'libcatchat')
 ]
