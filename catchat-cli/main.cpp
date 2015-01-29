@@ -9,5 +9,7 @@ int main(int , char **)
     init.read_config("catchat.cfg");
     init.write_config("catchat.cfg");
     init.dht_start();
+
+    init.dht_stop();
     return 0;
 }

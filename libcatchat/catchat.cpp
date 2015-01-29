@@ -270,9 +270,14 @@ public:
         }
     }
 
-    void dhp_stop()
+    void dht_stop()
     {
         dht_uninit();
+
+        cat_socket_close(_ipv4);
+        cat_socket_close(_ipv6);
+        _ipv4 = CAT_SOCKET_INVALID;
+        _ipv6 = CAT_SOCKET_INVALID;
     }
 
     ~impl()
@@ -297,6 +302,11 @@ void catchat::dht_start()
     _impl->dht_start();
 }
 
+void catchat::dht_stop()
+{
+    _impl->dht_stop();
+}
+
 void catchat::dht_port(uint16_t p)
 {
     _impl->dht_port(p);
@@ -316,6 +326,12 @@ void catchat::dht_node_id(const std::string& n)
 {
     _impl->dht_node_id(n);
 }
+
+bool catchat::dht_use_ipv4() const { return _impl->dht_use_ipv4(); }
+void catchat::dht_use_ipv4(bool v) { return _impl->dht_use_ipv4(v); }
+
+bool catchat::dht_use_ipv6() const { return _impl->dht_use_ipv6(); }
+void catchat::dht_use_ipv6(bool v) { return _impl->dht_use_ipv6(v); }
 
 void catchat::write_config(const char* f)
 {

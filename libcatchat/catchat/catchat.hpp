@@ -24,10 +24,17 @@ public:
     void dht_node_id(const std::string&);
     std::string dht_node_id() const;
 
+    void dht_use_ipv4(bool);
+    bool dht_use_ipv4() const;
+
+    void dht_use_ipv6(bool);
+    bool dht_use_ipv6() const;
+
     void read_config(const char* filename = nullptr);
     void write_config(const char* filename);
 
     void dht_start();
+    void dht_stop();
 };
 
 class CATCHAT_API node
