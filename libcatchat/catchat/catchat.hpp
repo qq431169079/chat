@@ -37,14 +37,6 @@ public:
     void dht_stop();
 };
 
-class CATCHAT_API node
-{
-
-public:
-    node();
-    void run_once();
-};
-
 }
 
 #endif /* CATCHAT_CATCHAT_HPP */

@@ -343,18 +343,7 @@ void catchat::read_config(const char* f)
     _impl->read_config(f);
 }
 
-node::node()
-{
-
 }
-
-void node::run_once()
-{
-    cout << "Hello World" << endl;
-}
-
-}
-
 
 extern "C"
 {

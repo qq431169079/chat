@@ -8,12 +8,20 @@
 
 class CATCHAT_API communication_error : public std::runtime_error
 {
-    using std::runtime_error::runtime_error;
+public:
+    communication_error(const std::string& what)
+        : std::runtime_error(what) {}
+    communication_error(const char* what)
+        : std::runtime_error(what) {}
 };
 
 class CATCHAT_API configuration_error : public std::runtime_error
 {
-    using std::runtime_error::runtime_error;
+public:
+    configuration_error(const std::string& what)
+        : std::runtime_error(what) {}
+    configuration_error(const char* what)
+        : std::runtime_error(what) {}
 };
 
 #endif /* CATCHAT_EXCEPTIONS_HPP */
