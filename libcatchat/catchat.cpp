@@ -3,6 +3,7 @@
 #include <catchat/exceptions.hpp>
 #include "compat.hpp"
 #include "sockets.hpp"
+#include "dht_cmd.hpp"
 
 extern "C" {
 #include "dht.h"
@@ -18,6 +19,8 @@ extern "C" {
 
 #include <iostream>
 #include <thread>
+#include <mutex>
+#include <queue>
 #include <cassert>
 
 #define DHT_HASH_LENGTH 20
@@ -38,7 +41,11 @@ private:
     ev::timer _dht_timer;
     ev::io _io_ipv4;
     ev::io _io_ipv6;
-    ev::async _loop_exit;
+
+    queue<unique_ptr<dht_cmd>> _queue;
+    mutex _queue_mutex;
+    ev::async _queue_watcher;
+
     ev::default_loop _loop;
     thread _ev_thread;
 
@@ -106,13 +113,13 @@ private:
         int rc = recvfrom(watcher.fd,
                           buf, sizeof(buf) - 1,
                           0,
-                          (struct sockaddr*)&from, &fromlen);
+                          (struct ::sockaddr*)&from, &fromlen);
         if (rc > 0) {
             cout << "Received: " << rc << endl;
             buf[rc] = '\0';
 
             time_t tosleep = 0;
-            rc = dht_periodic(buf, rc, (struct sockaddr*)&from, fromlen, &tosleep, dht_callback_wrapper, this);
+            rc = dht_periodic(buf, rc, (struct ::sockaddr*)&from, fromlen, &tosleep, dht_callback_wrapper, this);
             if (rc < 0) {
                 std::terminate();
             }
@@ -134,10 +141,21 @@ private:
         _dht_timer.start(tosleep);
     }
 
-    void loop_exit()
+    void dht_cmd_callback()
     {
-        cout << "Exiting..." << endl;
-        _loop.break_loop();
+        lock_guard<mutex> lock(_queue_mutex);
+        while (!_queue.empty()) {
+            _queue.front()->invoke();
+            _queue.pop();
+        }
+    }
+
+    template<typename T, typename ...Args>
+    void invoke_dht_cmd(Args&& ...args)
+    {
+        lock_guard<mutex> lock(_queue_mutex);
+        _queue.push(make_unique<T>(std::forward<Args>(args)...));
+        _queue_watcher.send();
     }
 
 public:
@@ -152,7 +170,7 @@ public:
         _io_ipv4.set<impl, &impl::dht_available>(this);
         _io_ipv6.set<impl, &impl::dht_available>(this);
         _dht_timer.set<impl, &impl::dht_timer>(this);
-        _loop_exit.set<impl, &impl::loop_exit>(this);
+        _queue_watcher.set<impl, &impl::dht_cmd_callback>(this);
     }
 
     void dht_callback(int event,
@@ -298,7 +316,7 @@ public:
             sin4.sin_port = htons(dht_port());
             sin4.sin_addr.s_addr = htonl(INADDR_ANY);
 
-            r = bind(_ipv4, (struct sockaddr*) &sin4, sizeof(sin4));
+            r = bind(_ipv4, (struct ::sockaddr*) &sin4, sizeof(sin4));
             if (0 > r) {
                 cat_socket_close(_ipv4);
                 _ipv4 = CAT_SOCKET_INVALID;
@@ -335,7 +353,7 @@ public:
             sin6.sin6_port = htons(dht_port());
             // ipv6 wildcard is all zeros, so the memset took care of that.
 
-            r = bind(_ipv6, (struct sockaddr*) &sin6, sizeof(sin6));
+            r = bind(_ipv6, (struct ::sockaddr*) &sin6, sizeof(sin6));
             if (0 > r) {
                 cat_socket_close(_ipv4);
                 _ipv4 = CAT_SOCKET_INVALID;
@@ -362,7 +380,7 @@ public:
         initial /= 255.;
         _dht_timer.set(_loop);
         _dht_timer.start(initial);
-        _loop_exit.start();
+        _queue_watcher.start();
 
         _ev_thread = thread(&impl::dht_loop, this);
 
@@ -370,8 +388,13 @@ public:
 
     void dht_stop()
     {
-        _loop_exit.send();
+        invoke_dht_cmd<dht_cmd_stop>(_loop);
         _ev_thread.join();
+    }
+
+    void dht_ping_node(struct ::sockaddr* addr, size_t size)
+    {
+        invoke_dht_cmd<dht_cmd_ping_node>(addr, size);
     }
 
     ~impl()
@@ -450,12 +473,17 @@ void catchat::read_config(const char* f)
     _impl->read_config(f);
 }
 
+void catchat::dht_ping_node(struct ::sockaddr* addr, size_t len)
+{
+    _impl->dht_ping_node(addr, len);
+}
+
 }
 
 extern "C"
 {
 
-int dht_blacklisted(const struct sockaddr *, int )
+int dht_blacklisted(const struct ::sockaddr *, int )
 {
     return 0;
 }

@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <catchat/common.hpp>
+#include <sys/socket.h>
 
 namespace catchat
 {
@@ -50,6 +51,8 @@ public:
 
     void dht_start();
     void dht_stop();
+
+    void dht_ping_node(struct ::sockaddr* addr, size_t size);
 };
 
 }
