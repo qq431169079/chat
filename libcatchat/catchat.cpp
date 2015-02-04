@@ -12,9 +12,12 @@ extern "C" {
 #include <botan/sha160.h>
 #include <botan/hex.h>
 
+#include <ev++.h>
+
 #include <libconfig.h++>
 
 #include <iostream>
+#include <thread>
 #include <cassert>
 
 #define DHT_HASH_LENGTH 20
@@ -32,6 +35,13 @@ static Botan::SHA_160 *s_dht_hash = nullptr;
 class catchat::impl
 {
 private:
+    ev::timer _dht_timer;
+    ev::io _io_ipv4;
+    ev::io _io_ipv6;
+    ev::async _loop_exit;
+    ev::default_loop _loop;
+    thread _ev_thread;
+
     Botan::LibraryInitializer _init;
     Botan::AutoSeeded_RNG _rng;
     Botan::SHA_160 _sha160;
@@ -70,6 +80,66 @@ private:
         }
     }
 
+    void dht_loop()
+    {
+        _loop.run();
+
+        dht_uninit();
+
+        cat_socket_close(_ipv4);
+        cat_socket_close(_ipv6);
+        _ipv4 = CAT_SOCKET_INVALID;
+        _ipv6 = CAT_SOCKET_INVALID;
+    }
+
+    void dht_available(ev::io& watcher, int revents)
+    {
+        if (EV_ERROR & revents) {
+            std::terminate();
+        }
+
+        unsigned char buf[4096];
+
+        struct sockaddr_storage from;
+        socklen_t fromlen = sizeof(from);
+
+        int rc = recvfrom(watcher.fd,
+                          buf, sizeof(buf) - 1,
+                          0,
+                          (struct sockaddr*)&from, &fromlen);
+        if (rc > 0) {
+            cout << "Received: " << rc << endl;
+            buf[rc] = '\0';
+
+            time_t tosleep = 0;
+            rc = dht_periodic(buf, rc, (struct sockaddr*)&from, fromlen, &tosleep, dht_callback_wrapper, this);
+            if (rc < 0) {
+                std::terminate();
+            }
+
+            cout << "Sleeping for " << tosleep << " seconds." << endl;
+            _dht_timer.stop();
+            _dht_timer.start(tosleep);
+        } else {
+            std::terminate();
+        }
+    }
+
+    void dht_timer()
+    {
+        time_t tosleep;
+        dht_periodic(NULL, 0, NULL, 0, &tosleep, dht_callback_wrapper, this);
+        cout << "Sleeping for " << tosleep << " seconds." << endl;
+
+        _dht_timer.start(tosleep);
+    }
+
+    void loop_exit()
+    {
+        cout << "Exiting..." << endl;
+        _loop.break_loop();
+    }
+
 public:
     impl()
     {
@@ -78,7 +148,23 @@ public:
 
         s_dht_rng = &_rng;
         s_dht_hash = &_sha160;
+
+        _io_ipv4.set<impl, &impl::dht_available>(this);
+        _io_ipv6.set<impl, &impl::dht_available>(this);
+        _dht_timer.set<impl, &impl::dht_timer>(this);
+        _loop_exit.set<impl, &impl::loop_exit>(this);
     }
+
+    void dht_callback(int event,
+                      const unsigned char* info_hash,
+                      const void*,
+                      size_t data_len)
+    {
+        cout << "Event: " << event << endl
+             << "Info Hash: " << info_hash << endl
+             << "Data Len: " << data_len << endl;
+    }
+
 
     void dht_node_id(const std::string& node_id)
     {
@@ -268,16 +354,24 @@ public:
             _ipv6 = CAT_SOCKET_INVALID;
             throw communication_error("could not start dht");
         }
+
+        _io_ipv4.start(_ipv4, ev::READ);
+        _io_ipv6.start(_ipv6, ev::READ);
+
+        ev_tstamp initial = _rng.next_byte();
+        initial /= 255.;
+        _dht_timer.set(_loop);
+        _dht_timer.start(initial);
+        _loop_exit.start();
+
+        _ev_thread = thread(&impl::dht_loop, this);
+
     }
 
     void dht_stop()
     {
-        dht_uninit();
-
-        cat_socket_close(_ipv4);
-        cat_socket_close(_ipv6);
-        _ipv4 = CAT_SOCKET_INVALID;
-        _ipv6 = CAT_SOCKET_INVALID;
+        _loop_exit.send();
+        _ev_thread.join();
     }
 
     ~impl()
@@ -286,6 +380,19 @@ public:
         s_dht_rng = nullptr;
     }
 };
+
+extern "C"
+{
+void dht_callback_wrapper(void* closure,
+                          int event,
+                          const unsigned char* info_hash,
+                          const void* data,
+                          size_t data_len)
+{
+    ((catchat::impl*)closure)->dht_callback(event, info_hash, data, data_len);
+}
+}
+
 
 catchat::catchat()
     : _impl(make_unique<catchat::impl>())

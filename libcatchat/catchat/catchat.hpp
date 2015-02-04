@@ -8,8 +8,23 @@
 namespace catchat
 {
 
+extern "C"
+{
+void dht_callback_wrapper(void* closure,
+                      int event,
+                      const unsigned char* info_hash,
+                      const void* data,
+                      size_t data_len);
+}
+
 class CATCHAT_API catchat
 {
+    friend void dht_callback_wrapper(void* closure,
+                          int event,
+                          const unsigned char* info_hash,
+                          const void* data,
+                          size_t data_len);
+
 private:
     class impl;
     std::unique_ptr<catchat::impl> _impl;
