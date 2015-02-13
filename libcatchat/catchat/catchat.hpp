@@ -18,6 +18,8 @@ void dht_callback_wrapper(void* closure,
                       size_t data_len);
 }
 
+class identity;
+
 class CATCHAT_API catchat
 {
     friend void dht_callback_wrapper(void* closure,
@@ -25,10 +27,14 @@ class CATCHAT_API catchat
                           const unsigned char* info_hash,
                           const void* data,
                           size_t data_len);
+    friend class identity;
 
 private:
     class impl;
     std::unique_ptr<catchat::impl> _impl;
+
+    void add(identity* id);
+    void remove(identity* id);
 
 public:
     catchat();

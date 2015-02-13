@@ -4,6 +4,7 @@
 #include "compat.hpp"
 #include "sockets.hpp"
 #include "dht_cmd.hpp"
+#include "keygen.hpp"
 
 extern "C" {
 #include "dht.h"
@@ -12,11 +13,13 @@ extern "C" {
 #include <botan/botan.h>
 #include <botan/sha160.h>
 #include <botan/hex.h>
+#include <botan/pkcs8.h>
 
 #include <ev++.h>
 
 #include <libconfig.h++>
 
+#include <unordered_set>
 #include <iostream>
 #include <thread>
 #include <mutex>
@@ -57,6 +60,9 @@ private:
 
     cat_socket _ipv4 = CAT_SOCKET_INVALID;
     cat_socket _ipv6 = CAT_SOCKET_INVALID;
+
+    mutex _identities_mutex;
+    unordered_set<identity*> _identities;
 
     void generate_node_id(Botan::byte* id, size_t length)
     {
@@ -115,7 +121,7 @@ private:
                           0,
                           (struct ::sockaddr*)&from, &fromlen);
         if (rc > 0) {
-            cout << "Received: " << rc << endl;
+            cout << getpid() << " Received: " << rc << endl;
             buf[rc] = '\0';
 
             time_t tosleep = 0;
@@ -124,7 +130,7 @@ private:
                 std::terminate();
             }
 
-            cout << "Sleeping for " << tosleep << " seconds." << endl;
+            cout << getpid() << " Sleeping for " << tosleep << " seconds." << endl;
             _dht_timer.stop();
             _dht_timer.start(tosleep);
         } else {
@@ -136,7 +142,7 @@ private:
     {
         time_t tosleep;
         dht_periodic(NULL, 0, NULL, 0, &tosleep, dht_callback_wrapper, this);
-        cout << "Sleeping for " << tosleep << " seconds." << endl;
+        cout << getpid() << " Sleeping for " << tosleep << " seconds." << endl;
 
         _dht_timer.start(tosleep);
     }
@@ -178,7 +184,8 @@ public:
                       const void*,
                       size_t data_len)
     {
-        cout << "Event: " << event << endl
+        cout << getpid()
+             << " Event: " << event << endl
              << "Info Hash: " << info_hash << endl
              << "Data Len: " << data_len << endl;
     }
@@ -397,6 +404,22 @@ public:
         invoke_dht_cmd<dht_cmd_ping_node>(addr, size);
     }
 
+    void add(identity* id)
+    {
+        lock_guard<mutex> lock(_identities_mutex);
+        _identities.emplace(id);
+    }
+
+    void remove(identity* id)
+    {
+        lock_guard<mutex> lock(_identities_mutex);
+        unordered_set<identity*>::iterator pos = _identities.find(id);
+
+        if (pos != _identities.end()) {
+            _identities.erase(pos);
+        }
+    }
+
     ~impl()
     {
         s_dht_hash = nullptr;
@@ -477,6 +500,9 @@ void catchat::dht_ping_node(struct ::sockaddr* addr, size_t len)
 {
     _impl->dht_ping_node(addr, len);
 }
+
+void catchat::add(identity* id) { _impl->add(id); }
+void catchat::remove(identity* id) { _impl->remove(id); }
 
 }
 

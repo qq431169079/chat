@@ -6,6 +6,15 @@
 
 #include <stdexcept>
 
+class CATCHAT_API credentials_error : public std::runtime_error
+{
+public:
+    credentials_error(const std::string& what)
+        : std::runtime_error(what) {}
+    credentials_error(const char* what)
+        : std::runtime_error(what) {}
+};
+
 class CATCHAT_API communication_error : public std::runtime_error
 {
 public:
