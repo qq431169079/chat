@@ -1,4 +1,4 @@
-add_library(catchat dht.c catchat.cpp dht_cmd.cpp keygen.cpp identity.cpp)
+add_library(catchat dht.c catchat.cpp keygen.cpp identity.cpp)
 
 find_package(Botan REQUIRED)
 find_package(LibConfig++ REQUIRED)

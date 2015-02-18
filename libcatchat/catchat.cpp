@@ -3,7 +3,6 @@
 #include <catchat/exceptions.hpp>
 #include "compat.hpp"
 #include "sockets.hpp"
-#include "dht_cmd.hpp"
 #include "keygen.hpp"
 
 extern "C" {
@@ -19,6 +18,8 @@ extern "C" {
 
 #include <libconfig.h++>
 
+#include <future>
+#include <functional>
 #include <unordered_set>
 #include <iostream>
 #include <thread>
@@ -28,7 +29,11 @@ extern "C" {
 
 #define DHT_HASH_LENGTH 20
 
-using namespace std;
+using std::cout;
+using std::endl;
+using std::shared_ptr;
+using std::unique_ptr;
+using std::make_shared;
 using namespace libconfig;
 
 namespace catchat
@@ -45,12 +50,12 @@ private:
     ev::io _io_ipv4;
     ev::io _io_ipv6;
 
-    queue<unique_ptr<dht_cmd>> _queue;
-    mutex _queue_mutex;
+    std::queue<std::function<void()>> _queue;
+    std::mutex _queue_mutex;
     ev::async _queue_watcher;
 
     ev::default_loop _loop;
-    thread _ev_thread;
+    std::thread _ev_thread;
 
     Botan::LibraryInitializer _init;
     Botan::AutoSeeded_RNG _rng;
@@ -61,8 +66,8 @@ private:
     cat_socket _ipv4 = CAT_SOCKET_INVALID;
     cat_socket _ipv6 = CAT_SOCKET_INVALID;
 
-    mutex _identities_mutex;
-    unordered_set<identity*> _identities;
+    std::mutex _identities_mutex;
+    std::unordered_set<identity*> _identities;
 
     void generate_node_id(Botan::byte* id, size_t length)
     {
@@ -149,19 +154,29 @@ private:
 
     void dht_cmd_callback()
     {
-        lock_guard<mutex> lock(_queue_mutex);
+        std::lock_guard<std::mutex> lock(_queue_mutex);
         while (!_queue.empty()) {
-            _queue.front()->invoke();
+            _queue.front()();
             _queue.pop();
         }
     }
 
-    template<typename T, typename ...Args>
-    void invoke_dht_cmd(Args&& ...args)
+    template<typename RFunc, typename... Args>
+    auto invoke_dht_cmd(RFunc func, Args&& ...args) -> std::future<decltype(std::bind(func, std::forward<Args>(args)...)())>
     {
-        lock_guard<mutex> lock(_queue_mutex);
-        _queue.push(make_unique<T>(std::forward<Args>(args)...));
-        _queue_watcher.send();
+        typedef decltype(std::bind(func, std::forward<Args>(args)...)()) RType;
+        std::lock_guard<std::mutex> lock(_queue_mutex);
+
+        auto funcWithArgs = std::bind(func, std::forward<Args>(args)...);
+
+        // XXX: Shouldn't have to use unique_ptr here. When c++14 comes out,
+        //      use the new unified capture syntax.
+        shared_ptr<std::packaged_task<RType()>> task =
+                make_shared<std::packaged_task<RType()>>(funcWithArgs);
+        std::future<RType> f = task->get_future();
+
+        _queue.emplace([task] () { (*task)(); });
+        return f;
     }
 
 public:
@@ -389,31 +404,31 @@ public:
         _dht_timer.start(initial);
         _queue_watcher.start();
 
-        _ev_thread = thread(&impl::dht_loop, this);
+        _ev_thread = std::thread(&impl::dht_loop, this);
 
     }
 
     void dht_stop()
     {
-        invoke_dht_cmd<dht_cmd_stop>(_loop);
+        invoke_dht_cmd(&ev::default_loop::break_loop, &_loop, ev::how_t::ALL);
         _ev_thread.join();
     }
 
     void dht_ping_node(struct ::sockaddr* addr, size_t size)
     {
-        invoke_dht_cmd<dht_cmd_ping_node>(addr, size);
+        invoke_dht_cmd(&::dht_ping_node, addr, size);
     }
 
     void add(identity* id)
     {
-        lock_guard<mutex> lock(_identities_mutex);
+        std::lock_guard<std::mutex> lock(_identities_mutex);
         _identities.emplace(id);
     }
 
     void remove(identity* id)
     {
-        lock_guard<mutex> lock(_identities_mutex);
-        unordered_set<identity*>::iterator pos = _identities.find(id);
+        std::lock_guard<std::mutex> lock(_identities_mutex);
+        std::unordered_set<identity*>::iterator pos = _identities.find(id);
 
         if (pos != _identities.end()) {
             _identities.erase(pos);
