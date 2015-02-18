@@ -176,6 +176,7 @@ private:
         std::future<RType> f = task->get_future();
 
         _queue.emplace([task] () { (*task)(); });
+        _queue_watcher.send();
         return f;
     }
 
