@@ -1,3 +1,4 @@
+#include <ncurses.h>
 #include <catchat/catchat.hpp>
 #include <catchat/identity.hpp>
 #include <sstream>
@@ -14,7 +15,11 @@ using std::endl;
 
 int main(int argc, char ** argv)
 {
+    initscr();
+    printw(argv[0]);
+    refresh();
     if (argc != 2) {
+        endwin();
         cout << "Usage: " << argv[0] << " <port>" << endl;
         return 1;
     }
@@ -28,6 +33,7 @@ int main(int argc, char ** argv)
     ss >> port;
 
     if (ss.fail()) {
+        endwin();
         cout << "Unable to parse port" << endl;
         return 1;
     }
@@ -37,8 +43,8 @@ int main(int argc, char ** argv)
     init.dht_start();
 
     // An example of how to add another node
-    if (init.dht_port() != 12876) {             // If we have the default port,
-        cout << "Me!" << std::endl;             // we're gonna do the pinging.
+    if (init.dht_port() != 12876) {             // If we don't have the default port,
+        printw("We gon ping!");             // we're gonna do the pinging.
 
         struct sockaddr_in in;                  // Construct the remote address
         in.sin_family = AF_INET;
@@ -47,12 +53,16 @@ int main(int argc, char ** argv)
         init.dht_ping_node((struct sockaddr*)&in, sizeof(in));
     }
 
+    //Function to add some number of identities
     catchat::identity id(init);
     id.credentials("user", "pass");
     id.start();
 
-    sleep(1200);
+    printw("COMPLETED THE FUN");
+    refresh();
+    sleep(10);
 
     init.dht_stop();
+    endwin();
     return 0;
 }
