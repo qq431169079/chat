@@ -2,7 +2,7 @@
 #ifndef CATCHAT_SOCKETS_HPP
 #define CATCHAT_SOCKETS_HPP
 
-#ifdef __unix__
+#if defined(unix) || defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))
 #   include <unistd.h>
 #   include <sys/types.h>
 #   include <sys/socket.h>

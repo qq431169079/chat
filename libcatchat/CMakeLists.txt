@@ -9,8 +9,11 @@ target_include_directories(catchat
                                 ${CMAKE_CURRENT_SOURCE_DIR}
                             PRIVATE
                                 ${BOTAN_INCLUDE_DIR}
-                                ${LIBCONFIG_INCLUDE_DIR}
-                                ${LIBEV_INCLUDE_DIR} )
+                                ${LIBCONFIG_INCLUDE_DIR})
+target_include_directories(catchat
+                            SYSTEM
+                            PRIVATE
+                                ${LIBEV_INCLUDE_DIR})
 
 target_link_libraries(catchat
                         ${BOTAN_LIBRARIES}
